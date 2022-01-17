@@ -13,7 +13,8 @@ class DiscoveryView extends StatefulWidget {
 
   final ValueChanged<BluetoothDevice> onDeviceChosen;
 
-  const DiscoveryView({Key? key,  required this.onDeviceChosen, this.start = true}) : super(key: key);
+  const DiscoveryView({Key? key, required this.onDeviceChosen, this.start = true})
+      : super(key: key);
 
   @override
   _DiscoveryView createState() => new _DiscoveryView();
@@ -46,6 +47,9 @@ class _DiscoveryView extends State<DiscoveryView> {
   }
 
   void _startDiscovery() {
+    FlutterBluetoothSerial.instance.getBondedDevices().then((bondedDevices) {
+      results = bondedDevices.map((e) => BluetoothDiscoveryResult(device: e)).toList();
+    });
     _streamSubscription = FlutterBluetoothSerial.instance.startDiscovery().listen((r) {
       setState(() {
         final existingIndex =

@@ -41,6 +41,14 @@ class _ChartViewState extends State<ChartView> {
     super.initState();
   }
 
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    widget.connection?.dispose();
+    widget.connection = null;
+    super.dispose();
+  }
+
   void connectToDevice(BluetoothDevice device) async {
     await BluetoothConnection.toAddress(device.address).then((value) => widget.connection);
     widget.streamSubscription = widget.connection!.input!.listen((event) {
