@@ -37,14 +37,12 @@ class _ChartViewState extends State<ChartView> {
 
   @override
   void initState() {
-    // TODO: implement initState
     connectToDevice(widget.device);
     super.initState();
   }
 
   @override
   void dispose() {
-    // TODO: implement dispose
     if (connection != null) {
       connection?.dispose();
       connection = null;
@@ -257,6 +255,7 @@ class _ChartViewState extends State<ChartView> {
                       _setStartDate();
                     },
                     child: const Text("Set new Start")),
+                    // TODO: add button to save data as csv
               ],
             ),
           ],

@@ -100,7 +100,6 @@ class _MainPage extends State<MainPage> {
         actions: [
           IconButton(
             onPressed: () {
-              // TODO: Go to settings
             },
             icon: Icon(Icons.settings),
           ),

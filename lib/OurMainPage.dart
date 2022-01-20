@@ -174,7 +174,6 @@ class _OurMainPageState extends State<OurMainPage> {
                 onDeviceChosen: _chooseDevice,
               );
             } else {
-              // TODO: Show graph
               return ChartView(device: chosenDevice!, onDisconnect: _chooseDevice,);
               return const Center(
                 child: Text("Graph"),
