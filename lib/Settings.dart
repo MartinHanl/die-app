@@ -18,6 +18,17 @@ class Settings extends StatelessWidget {
             subtitle: Text(FlutterBluetoothSerial.instance.name.toString()),
             //TODO aussafinden wie der in aktuellen state und so zruckgibt
           ),
+          ListTile(
+            title: const Text("About"),
+            onTap: () {
+              showAboutDialog(
+                context: context,
+                applicationIcon: Image.asset("assets/icon/DIE-Icon.png"),
+                applicationName: "DIE",
+                applicationVersion: "0.2.0",
+              );
+            },
+          ),
         ],
       ),
     );

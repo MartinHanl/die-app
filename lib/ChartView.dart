@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:charts_flutter/flutter.dart' as charts;
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
 class DataSample {
   final double value;
@@ -28,8 +30,10 @@ class ChartView extends StatefulWidget {
 class _ChartViewState extends State<ChartView> {
   BluetoothConnection? connection;
   List<DataSample> _dataSamples = [];
-  List<charts.Series<DataSample, int>> seriesList = [];
+  // List<charts.Series<DataSample, int>> seriesList = [];
+  List<FlSpot> _flSpots = [];
   late StreamSubscription<Uint8List> streamSubscription;
+  DateTime _startDate = DateTime.now();
 
   @override
   void initState() {
@@ -58,89 +62,109 @@ class _ChartViewState extends State<ChartView> {
       isConnecting = true;
     });
     connection = await BluetoothConnection.toAddress(device.address);
+    _setStartDate();
     if (connection != null) {
       setState(() {
         isConnecting = false;
       });
     }
     print("Completed connection");
-    streamSubscription = connection!.input!.listen((event) {
-      print("New stream data: ${ascii.decode(event).endsWith("\r\n")} from $event");
-        
-        // Allocate buffer for parsed data
-        int backspacesCounter = 0;
-        for (int byte in event) {
-          if (byte == 8 || byte == 127) {
-            backspacesCounter++;
-          }
-        }
-        Uint8List buffer = Uint8List(event.length - backspacesCounter);
-        int bufferIndex = buffer.length;
+    streamSubscription = connection!.input!.listen(onDataRecieved);
+  }
 
-        // Apply backspace control character
-        backspacesCounter = 0;
-        for (int i = event.length - 1; i >= 0; i--) {
-          if (event[i] == 8 || event[i] == 127) {
-            backspacesCounter++;
-          } else {
-            if (backspacesCounter > 0) {
-              backspacesCounter--;
-            } else {
-              buffer[--bufferIndex] = event[i];
-            }
-          }
-        }
+  void onDataRecieved(Uint8List event) {
+    // Allocate buffer for parsed data
+    int backspacesCounter = 0;
+    for (int byte in event) {
+      if (byte == 8 || byte == 127) {
+        backspacesCounter++;
+      }
+    }
+    Uint8List buffer = Uint8List(event.length - backspacesCounter);
+    int bufferIndex = buffer.length;
 
-        // Create message if there is new line character
-        String dataString = String.fromCharCodes(buffer);
-        int index = buffer.indexOf(13);
-        if (~index != 0) {
-          setState(() {
-            double value = double.parse(
-                backspacesCounter > 0
-                    ? _messageBuffer.substring(0, _messageBuffer.length - backspacesCounter)
-                    : _messageBuffer + dataString.substring(0, index),
-            );
-            _dataSamples.add(
-              DataSample(
-                value,
-                DateTime.now(),
-              ),
-            );
-            seriesList = [
-              charts.Series(
-                id: "DataSamples",
-                data: _dataSamples,
-                domainFn: (DataSample sample, _) =>
-                    sample.dateTime.difference(DateTime.now()).inMilliseconds,
-                measureFn: (DataSample sample, _) => sample.value,
-              ),
-            ];
-            _messageBuffer = dataString.substring(index);
-          });
+    // Apply backspace control character
+    backspacesCounter = 0;
+    for (int i = event.length - 1; i >= 0; i--) {
+      if (event[i] == 8 || event[i] == 127) {
+        backspacesCounter++;
+      } else {
+        if (backspacesCounter > 0) {
+          backspacesCounter--;
         } else {
-          _messageBuffer = (backspacesCounter > 0
-              ? _messageBuffer.substring(0, _messageBuffer.length - backspacesCounter)
-              : _messageBuffer + dataString);
+          buffer[--bufferIndex] = event[i];
         }
-        // setState(() {
-        //   _buffer.add(
-        //     DataSample(
-        //       double.parse(ascii.decode(event)),
-        //       DateTime.now(),
-        //     ),
-        //   );
-        //   seriesList = [
-        //     charts.Series(
-        //       id: "DataSamples",
-        //       data: _buffer,
-        //       domainFn: (DataSample sample, _) =>
-        //           sample.dateTime.difference(DateTime.now()).inMilliseconds,
-        //       measureFn: (DataSample sample, _) => sample.value,
-        //     ),
-        //   ];
-        // });
+      }
+    }
+
+    // Create message if there is new line character
+    String dataString = String.fromCharCodes(buffer);
+    int index = buffer.indexOf(13);
+    if (~index != 0) {
+      setState(() {
+        double value = double.parse(
+          backspacesCounter > 0
+              ? _messageBuffer.substring(0, _messageBuffer.length - backspacesCounter)
+              : _messageBuffer + dataString.substring(0, index),
+        );
+        _dataSamples.add(
+          DataSample(
+            value,
+            DateTime.now(),
+          ),
+        );
+        // seriesList = [
+        //   charts.Series(
+        //     id: "DataSamples",
+        //     data: _dataSamples,
+        //     domainFn: (DataSample sample, _) =>
+        //         sample.dateTime.difference(DateTime.now()).inMilliseconds,
+        //     measureFn: (DataSample sample, _) => sample.value,
+        //   ),
+        // ];
+        _flSpots = _dataSamples.map((sample) {
+          return FlSpot(
+            sample.dateTime.difference(_startDate).inMilliseconds.toDouble(),
+            sample.value,
+          );
+        }).toList();
+        _messageBuffer = dataString.substring(index);
+      });
+    } else {
+      _messageBuffer = (backspacesCounter > 0
+          ? _messageBuffer.substring(0, _messageBuffer.length - backspacesCounter)
+          : _messageBuffer + dataString);
+    }
+  }
+
+  void _setStartDate() {
+    setState(() {
+      _startDate = DateTime.now();
+      _dataSamples = [];
+      _flSpots = _dataSamples.map((sample) {
+        return FlSpot(
+          sample.dateTime.difference(_startDate).inMilliseconds.toDouble(),
+          sample.value,
+        );
+      }).toList();
     });
+  }
+
+  SideTitles _bottomTitles() {
+    return SideTitles(
+      showTitles: true,
+      rotateAngle: 45,
+      reservedSize: 37,
+      getTitles: (value) {
+        final Duration dateTime = Duration(milliseconds: value.toInt());
+        if (dateTime.inSeconds < 60) {
+          return dateTime.toString().substring(5, dateTime.toString().length - 5) + "s";
+        } else if (dateTime.inMinutes < 60) {
+          return dateTime.toString().substring(2, dateTime.toString().length - 7);
+        }
+        return dateTime.toString().substring(0, dateTime.toString().length - 10);
+      },
+    );
   }
 
   @override
@@ -153,27 +177,88 @@ class _ChartViewState extends State<ChartView> {
             Builder(
               builder: (context) {
                 if (isConnecting) {
-                  return CircularProgressIndicator();
+                  return Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                        Text("Connecting"),
+                      ],
+                    ),
+                  );
                 } else {
-                  return seriesList.length > 0
+                  return _flSpots.length > 0
                       ? Expanded(
-                          child: charts.LineChart(
-                            seriesList,
-                            animate: true,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(8.0, 16, 8, 8),
+                            child: Stack(
+                              children: [
+                                LineChart(
+                                  LineChartData(
+                                    // axisTitleData: FlAxisTitleData(
+                                    //     leftTitle: AxisTitle(titleText: "rpm", showTitle: true),
+                                    //     bottomTitle: AxisTitle(titleText: "timeD", showTitle: true)),
+                                    lineBarsData: [
+                                      LineChartBarData(
+                                          spots: _flSpots,
+                                          colors: [Theme.of(context).colorScheme.secondary]),
+                                    ],
+                                    titlesData: FlTitlesData(
+                                      bottomTitles: _bottomTitles(),
+                                      topTitles: SideTitles(showTitles: false),
+                                    ),
+                                  ),
+                                  swapAnimationDuration: Duration(milliseconds: 150),
+                                  swapAnimationCurve: Curves.easeInOut,
+                                ),
+                                Positioned(
+                                  left: 0,
+                                  top: -5,
+                                  child: Text(
+                                    "rpm",
+                                    style: Theme.of(context).textTheme.headline5!.copyWith(
+                                          backgroundColor: Theme.of(context).canvasColor,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         )
-                      : Container(
-                          child: Text("No Data"),
+                      : Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                              Text("Waiting for data"),
+                            ],
+                          ),
                         );
                 }
               },
             ),
-            ElevatedButton(
-                onPressed: () async {
-                  connection?.dispose();
-                  widget.onDisconnect(null);
-                },
-                child: const Text("Disconnect")),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                    onPressed: () async {
+                      connection?.dispose();
+                      widget.onDisconnect(null);
+                    },
+                    child: const Text("Disconnect")),
+                ElevatedButton(
+                    onPressed: () {
+                      _setStartDate();
+                    },
+                    child: const Text("Set new Start")),
+              ],
+            ),
           ],
         ),
       ),
