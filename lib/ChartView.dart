@@ -1,13 +1,12 @@
 /// Example of a simple line chart.
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:charts_flutter/flutter.dart' as charts;
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 class DataSample {
   final double value;
@@ -17,11 +16,19 @@ class DataSample {
 }
 
 class ChartView extends StatefulWidget {
-  final BluetoothDevice device;
+  final BluetoothDevice? device;
+  final SerialPort? port;
 
-  final ValueChanged<BluetoothDevice?> onDisconnect;
+  final ValueChanged<BluetoothDevice?> onBluetoothDisconnect;
+  final ValueChanged<SerialPort?> onSerialDisconnect;
 
-  ChartView({Key? key, required this.device, required this.onDisconnect}) : super(key: key);
+  ChartView(
+      {Key? key,
+      this.device,
+      this.port,
+      required this.onBluetoothDisconnect,
+      required this.onSerialDisconnect})
+      : super(key: key);
 
   @override
   _ChartViewState createState() => _ChartViewState();
@@ -29,15 +36,31 @@ class ChartView extends StatefulWidget {
 
 class _ChartViewState extends State<ChartView> {
   BluetoothConnection? connection;
+
   List<DataSample> _dataSamples = [];
-  // List<charts.Series<DataSample, int>> seriesList = [];
   List<FlSpot> _flSpots = [];
+
   late StreamSubscription<Uint8List> streamSubscription;
   DateTime _startDate = DateTime.now();
 
+  String _messageBuffer = '';
+  bool isConnecting = false;
+
+  late SerialPortReader _portReader;
+
   @override
   void initState() {
-    connectToDevice(widget.device);
+    if (widget.device != null) {
+      connectToBluetoothDevice(widget.device!);
+    } else if (widget.port != null) {
+      widget.port!.openRead();
+      _portReader = SerialPortReader(widget.port!, timeout: 2000);
+      // _portReader.close();
+      streamSubscription = _portReader.stream.listen(onDataRecieved)
+        ..onError((e) => print("lol error: $e"));
+      // print(widget.port!.openRead());
+      // connectToSerialPort(widget.port!);
+    }
     super.initState();
   }
 
@@ -50,12 +73,12 @@ class _ChartViewState extends State<ChartView> {
     connection?.dispose();
     connection = null;
     streamSubscription.cancel();
+    print(widget.port?.close());
+    widget.port?.dispose();
     super.dispose();
   }
 
-  String _messageBuffer = '';
-  bool isConnecting = false;
-  Future<void> connectToDevice(BluetoothDevice device) async {
+  void connectToBluetoothDevice(BluetoothDevice device) async {
     setState(() {
       isConnecting = true;
     });
@@ -70,7 +93,18 @@ class _ChartViewState extends State<ChartView> {
     streamSubscription = connection!.input!.listen(onDataRecieved);
   }
 
+  void connectToSerialPort(SerialPort port) {
+    isConnecting = true;
+    SerialPortReader _portReader = SerialPortReader(port, timeout: 2000);
+    // streamSubscription = _portReader.stream.listen(onDataRecieved);
+    streamSubscription = _portReader.stream.listen((event) {
+      print(event);
+    });
+    isConnecting = false;
+  }
+
   void onDataRecieved(Uint8List event) {
+    print(event);
     // Allocate buffer for parsed data
     int backspacesCounter = 0;
     for (int byte in event) {
@@ -111,15 +145,6 @@ class _ChartViewState extends State<ChartView> {
             DateTime.now(),
           ),
         );
-        // seriesList = [
-        //   charts.Series(
-        //     id: "DataSamples",
-        //     data: _dataSamples,
-        //     domainFn: (DataSample sample, _) =>
-        //         sample.dateTime.difference(DateTime.now()).inMilliseconds,
-        //     measureFn: (DataSample sample, _) => sample.value,
-        //   ),
-        // ];
         _flSpots = _dataSamples.map((sample) {
           return FlSpot(
             sample.dateTime.difference(_startDate).inMilliseconds.toDouble(),
@@ -178,9 +203,9 @@ class _ChartViewState extends State<ChartView> {
                   return Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
+                      children: const [
                         Padding(
-                          padding: const EdgeInsets.all(8.0),
+                          padding: EdgeInsets.all(8.0),
                           child: CircularProgressIndicator(),
                         ),
                         Text("Connecting"),
@@ -188,7 +213,7 @@ class _ChartViewState extends State<ChartView> {
                     ),
                   );
                 } else {
-                  return _flSpots.length > 0
+                  return _flSpots.isNotEmpty
                       ? Expanded(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(8.0, 16, 8, 8),
@@ -209,7 +234,7 @@ class _ChartViewState extends State<ChartView> {
                                       topTitles: SideTitles(showTitles: false),
                                     ),
                                   ),
-                                  swapAnimationDuration: Duration(milliseconds: 150),
+                                  swapAnimationDuration: const Duration(milliseconds: 150),
                                   swapAnimationCurve: Curves.easeInOut,
                                 ),
                                 Positioned(
@@ -229,9 +254,9 @@ class _ChartViewState extends State<ChartView> {
                       : Expanded(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
+                            children: const [
                               Padding(
-                                padding: const EdgeInsets.all(8.0),
+                                padding: EdgeInsets.all(8.0),
                                 child: CircularProgressIndicator(),
                               ),
                               Text("Waiting for data"),
@@ -247,7 +272,8 @@ class _ChartViewState extends State<ChartView> {
                 ElevatedButton(
                     onPressed: () async {
                       connection?.dispose();
-                      widget.onDisconnect(null);
+                      widget.onBluetoothDisconnect(null);
+                      widget.onSerialDisconnect(null);
                     },
                     child: const Text("Disconnect")),
                 ElevatedButton(
@@ -255,7 +281,7 @@ class _ChartViewState extends State<ChartView> {
                       _setStartDate();
                     },
                     child: const Text("Set new Start")),
-                    // TODO: add button to save data as csv
+                // TODO: add button to save data as csv
               ],
             ),
           ],

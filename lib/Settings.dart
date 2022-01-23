@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 class Settings extends StatelessWidget {
   const Settings({Key? key}) : super(key: key);
@@ -13,9 +12,8 @@ class Settings extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          ListTile(
-            title: const Text("ebic"),
-            subtitle: Text(FlutterBluetoothSerial.instance.name.toString()),
+          const ListTile(
+            title: Text("ebic"),
             //TODO aussafinden wie der in aktuellen state und so zruckgibt
           ),
           ListTile(
@@ -23,9 +21,9 @@ class Settings extends StatelessWidget {
             onTap: () {
               showAboutDialog(
                 context: context,
-                applicationIcon: Image.asset("assets/icon/DIE-Icon.png"),
+                applicationIcon: Image.asset("assets/icon/DIE-Icon_125.png"),
                 applicationName: "DIE",
-                applicationVersion: "0.2.0",
+                applicationVersion: "0.3.0",
               );
             },
           ),
