@@ -1,6 +1,6 @@
 # die
 
-A new Flutter project.
+An app, that lets you recieve data over Bluetooth serial and display it in nice graph.
 
 ## Getting Started
 
